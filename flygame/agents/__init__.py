@@ -2,6 +2,7 @@
 
 Örnekler:
   scripted              -> basit betikli bot
+  heuristic             -> meyve arayan, sinekliklerden kaçan sezgisel bot
   replay:runs/x.json.gz -> kayıttan tekrar
   replay:runs/          -> klasördeki kayıtlardan her tur rastgele biri
 """
@@ -16,13 +17,17 @@ def make_agent(spec: str) -> Agent:
     name, _, arg = spec.partition(":")
     if name == "scripted":
         return ScriptedAgent()
+    if name == "heuristic":
+        from .heuristic import HeuristicAgent
+
+        return HeuristicAgent()
     if name == "replay":
         from .replay import ReplayAgent
 
         if not arg:
             raise ValueError("replay needs a path: replay:<file-or-dir>")
         return ReplayAgent(arg)
-    raise ValueError(f"Unknown agent: {spec!r} (known: scripted, replay:<path>)")
+    raise ValueError(f"Unknown agent: {spec!r} (known: scripted, heuristic, replay:<path>)")
 
 
 __all__ = ["Agent", "AgentKind", "make_agent"]

@@ -83,7 +83,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("play", help="run the split-screen game")
-    p.add_argument("--opponent", default="scripted", help="scripted | replay:<file-or-dir>")
+    p.add_argument("--opponent", default="scripted", help="scripted | heuristic | replay:<file-or-dir>")
     p.add_argument("--seed", type=int, default=None, help="fixed seed for every round")
     p.add_argument("--config", default=None, help="TOML file with setting overrides")
     p.add_argument("--fullscreen", action="store_true")

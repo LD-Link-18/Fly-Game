@@ -18,12 +18,21 @@ python3 -m venv .venv
 
 ```bash
 .venv/bin/python -m flygame play                          # vs scripted bot
+.venv/bin/python -m flygame play --opponent heuristic     # vs heuristic bot (seeks fruit, dodges)
 .venv/bin/python -m flygame play --lang tr --fullscreen
 .venv/bin/python -m flygame play --config configs/hard.toml
 .venv/bin/python -m flygame play --opponent replay:runs/  # ghost replays
 ```
 
 Keys: arrows (or WASD) to play, SPACE to start/continue, F11 to toggle fullscreen, ESC to quit.
+
+## Opponents
+
+| `--opponent` | What it is |
+|---|---|
+| `scripted` | heads for the nearest fruit, never dodges |
+| `heuristic` | picks fruit by arrival time, dodges swatters with a short look-ahead planner; weaken it with `[heuristic] speed_factor` / `reaction_s` in the config |
+| `replay:<file-or-dir>` | replays recorded runs (labelled as replays on screen) |
 
 ## Headless tools
 

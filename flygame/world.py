@@ -17,7 +17,7 @@ import math
 from dataclasses import dataclass, field
 
 from .actions import Action
-from .config import GameConfig
+from .config import ArenaConfig, FlyConfig, GameConfig
 from .schedule import Schedule, make_schedule
 
 
@@ -33,6 +33,30 @@ class FlyBody:
     heading: float
     vx: float = 0.0
     vy: float = 0.0
+
+
+def move_fly(fly: FlyBody, turn: float, forward: float, fc: FlyConfig, arena: ArenaConfig, dt: float) -> None:
+    """Sineğin bir adımlık hareketi (oyun ve planlayıcı ajanlar aynı fiziği kullanır)."""
+    fly.heading = wrap_angle(fly.heading + turn * math.radians(fc.turn_rate_deg) * dt)
+    target_speed = forward * fc.max_speed
+    tvx = math.cos(fly.heading) * target_speed
+    tvy = math.sin(fly.heading) * target_speed
+    k = min(1.0, fc.accel * dt)
+    fly.vx += (tvx - fly.vx) * k
+    fly.vy += (tvy - fly.vy) * k
+    fly.x += fly.vx * dt
+    fly.y += fly.vy * dt
+
+    # Duvarlar: sineği içeride tut, duvara dik hız bileşenini sıfırla
+    r = fc.radius
+    if fly.x < r:
+        fly.x, fly.vx = r, max(0.0, fly.vx)
+    elif fly.x > arena.width - r:
+        fly.x, fly.vx = arena.width - r, min(0.0, fly.vx)
+    if fly.y < r:
+        fly.y, fly.vy = r, max(0.0, fly.vy)
+    elif fly.y > arena.height - r:
+        fly.y, fly.vy = arena.height - r, min(0.0, fly.vy)
 
 
 @dataclass
@@ -156,30 +180,11 @@ class World:
 
         # 1) Hareket: sersemlemişse eylemler yok sayılır, sinek yavaşlar
         if self.stunned:
-            target_speed = 0.0
             self.stun_left = max(0.0, self.stun_left - dt)
+            move_fly(fly, 0.0, 0.0, fc, self.cfg.arena, dt)
         else:
-            fly.heading = wrap_angle(fly.heading + action.turn * math.radians(fc.turn_rate_deg) * dt)
-            target_speed = action.forward * fc.max_speed
-        tvx = math.cos(fly.heading) * target_speed
-        tvy = math.sin(fly.heading) * target_speed
-        k = min(1.0, fc.accel * dt)
-        fly.vx += (tvx - fly.vx) * k
-        fly.vy += (tvy - fly.vy) * k
-        fly.x += fly.vx * dt
-        fly.y += fly.vy * dt
-
-        # Duvarlar: sineği içeride tut, duvara dik hız bileşenini sıfırla
-        a = self.cfg.arena
+            move_fly(fly, action.turn, action.forward, fc, self.cfg.arena, dt)
         r = fc.radius
-        if fly.x < r:
-            fly.x, fly.vx = r, max(0.0, fly.vx)
-        elif fly.x > a.width - r:
-            fly.x, fly.vx = a.width - r, min(0.0, fly.vx)
-        if fly.y < r:
-            fly.y, fly.vy = r, max(0.0, fly.vy)
-        elif fly.y > a.height - r:
-            fly.y, fly.vy = a.height - r, min(0.0, fly.vy)
 
         # Zaman ilerler
         self.tick += 1

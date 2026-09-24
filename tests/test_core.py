@@ -11,6 +11,7 @@ from pathlib import Path
 from flygame.actions import Action
 from flygame.agents.base import Agent, AgentKind
 from flygame.agents.replay import ReplayAgent
+from flygame.agents.heuristic import HeuristicAgent
 from flygame.agents.scripted import ScriptedAgent
 from flygame.config import GameConfig, config_from_dict, load_config
 from flygame.recording import Recording
@@ -113,6 +114,37 @@ class TestSensing(unittest.TestCase):
         h0 = w.fly.heading
         w.step(Action(1.0, 0.0))
         self.assertGreater(w.fly.heading, h0)
+
+
+class TestHeuristic(unittest.TestCase):
+    def test_dodges_swatter_overhead(self):
+        # Sineklik tam sineğin üstünde belirir; ajan çarpmadan kaçmalı
+        cfg = GameConfig()
+        w = World(cfg, 1)
+        w.fruits.clear()
+        w.swatters.append(Swatter(99, w.fly.x, w.fly.y, cfg.swatter.radius, 0.0, cfg.swatter.loom_s))
+        agent = HeuristicAgent()
+        agent.reset(1, cfg)
+        while w.t < cfg.swatter.loom_s + 0.1:
+            w.step(agent.get_action(build_state(w)))
+        self.assertEqual(w.hits, 0)
+
+    def test_beats_scripted_on_average(self):
+        cfg = GameConfig()
+        seeds = range(1, 9)
+        h = sum(run_round(HeuristicAgent(), s, cfg).score for s in seeds)
+        b = sum(run_round(ScriptedAgent(), s, cfg).score for s in seeds)
+        self.assertGreater(h, b)
+
+    def test_handicap_lowers_score(self):
+        cfg = GameConfig()
+        weak = GameConfig()
+        weak.heuristic.speed_factor = 0.5
+        weak.heuristic.reaction_s = 0.9
+        seeds = range(1, 6)
+        full = sum(run_round(HeuristicAgent(), s, cfg).score for s in seeds)
+        slow = sum(run_round(HeuristicAgent(), s, weak).score for s in seeds)
+        self.assertGreater(full, slow)
 
 
 class TestConfig(unittest.TestCase):

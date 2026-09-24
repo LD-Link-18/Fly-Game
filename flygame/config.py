@@ -87,6 +87,14 @@ class SensoryConfig:
 
 
 @dataclass
+class HeuristicConfig:
+    # Sezgisel rakibin (HEURISTIC BOT) handikapları: ziyaretçilerin yenebileceği
+    # bir yedek rakip için. 1.0 / 0.0 = tam güç.
+    speed_factor: float = 1.0   # ileri hız çarpanı (0.8 = %20 daha yavaş)
+    reaction_s: float = 0.0     # sineklik gölgesini fark etme gecikmesi (insan ~0.4-0.6 sn)
+
+
+@dataclass
 class DisplayConfig:
     width: int = 1600
     height: int = 900
@@ -116,6 +124,7 @@ class GameConfig:
     swatter: SwatterConfig = field(default_factory=SwatterConfig)
     score: ScoreConfig = field(default_factory=ScoreConfig)
     sensory: SensoryConfig = field(default_factory=SensoryConfig)
+    heuristic: HeuristicConfig = field(default_factory=HeuristicConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
 
@@ -126,10 +135,11 @@ class GameConfig:
         """Oyun sonucunu etkileyen ayarların özeti.
 
         Kayıt/tekrar için kullanılır: aynı tohum + aynı eylemler ancak bu
-        ayarlar aynıysa aynı sonucu verir. Görüntü/ses ayarları dahil değildir.
+        ayarlar aynıysa aynı sonucu verir. Görüntü/ses ayarları ve rakip
+        ajan ayarları (eylemleri değiştirir, dünyayı değil) dahil değildir.
         """
         d = self.to_dict()
-        for key in ("display", "recording"):
+        for key in ("display", "recording", "heuristic"):
             d.pop(key)
         blob = json.dumps(d, sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:16]

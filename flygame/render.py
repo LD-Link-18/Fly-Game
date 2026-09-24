@@ -108,7 +108,9 @@ def make_fruit_sprite(kind: int, radius_px: float) -> pygame.Surface:
 
 
 def make_swatter_sprite(radius_px: float) -> pygame.Surface:
-    # Kare, delikli (ızgaralı) plastik sineklik başı + sap. Baş merkezi sprite merkezinde.
+    # Delikli (ızgaralı) plastik sineklik başı + sap. Baş merkezi sprite merkezinde.
+    # Köşeler çok yuvarlatılır: görünen baş, dairesel vuruş alanıyla örtüşsün
+    # (ziyaretçi "altındaydım ama vurulmadım" demesin).
     R = int(radius_px * SS)
     handle = int(R * 2.2)
     size = 2 * (R + handle)
@@ -120,15 +122,17 @@ def make_swatter_sprite(radius_px: float) -> pygame.Surface:
     pygame.draw.rect(s, (40, 110, 200), (c + R - hw, c - hw, handle + hw, 2 * hw), border_radius=hw)
     pygame.draw.rect(s, (25, 70, 140), (c + R - hw, c - hw, handle + hw, 2 * hw), max(2, hw // 3), border_radius=hw)
     # Baş
-    pygame.draw.rect(s, (220, 50, 60), head, border_radius=R // 3)
+    pygame.draw.rect(s, (220, 50, 60), head, border_radius=int(R * 0.7))
     grid = pygame.Surface(head.size, pygame.SRCALPHA)
     step = max(6, R // 6)
     hole = max(3, int(step * 0.55))
     for gx in range(step // 2, head.width - hole, step):
         for gy in range(step // 2, head.height - hole, step):
+            if math.hypot(gx + hole / 2 - R, gy + hole / 2 - R) > R * 0.88:
+                continue
             pygame.draw.rect(grid, (120, 20, 30, 255), (gx, gy, hole, hole), border_radius=hole // 3)
     s.blit(grid, head.topleft)
-    pygame.draw.rect(s, (130, 20, 30), head, max(3, R // 18), border_radius=R // 3)
+    pygame.draw.rect(s, (130, 20, 30), head, max(3, R // 18), border_radius=int(R * 0.7))
     size_px = max(4, size // SS)
     return pygame.transform.smoothscale(s, (size_px, size_px))
 
