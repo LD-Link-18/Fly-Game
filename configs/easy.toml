@@ -1,0 +1,12 @@
+# Kolay mod örneği (küçük çocuklar için)
+# Kullanım: python -m flygame play --config configs/easy.toml
+
+[swatter]
+loom_s = 1.8
+interval_min_s = 3.5
+interval_max_s = 6.0
+aim_at_player_prob = 0.5
+stun_s = 0.6
+
+[fly]
+max_speed = 260.0

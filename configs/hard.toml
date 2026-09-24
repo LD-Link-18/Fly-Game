@@ -1,0 +1,11 @@
+# Zor mod örneği: yalnızca varsayılandan farklı olan ayarlar yazılır.
+# Kullanım: python -m flygame play --config configs/hard.toml
+
+[swatter]
+loom_s = 0.95          # daha hızlı çarpar
+interval_min_s = 1.6   # daha sık gelir
+interval_max_s = 3.0
+aim_lead = 0.8
+
+[fruit]
+spawn_interval_s = 1.4

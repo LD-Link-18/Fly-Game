@@ -1,0 +1,4 @@
+# pygame-ce: pygame'in bakımı süren sürümü (aynı "import pygame" API'si).
+# Orijinal pygame 2.6.1'in font modülü Python 3.14'te çalışmıyor.
+pygame-ce>=2.5
+numpy>=1.24
