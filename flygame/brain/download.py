@@ -1,9 +1,10 @@
-"""FlyWire v783 verisini indir (~136 MB), sabit sürüm ve SHA-256 doğrulamasıyla.
+"""FlyWire v783 verisini indir (~137 MB), sabit sürüm ve SHA-256 doğrulamasıyla.
 
 Kaynaklar:
   - Shiu et al. 2024 modeli: github.com/philshiu/Drosophila_brain_model
   - FlyWire hücre tipleri (Schlegel et al. 2024): github.com/flyconnectome/flywire_annotations
-Dosyalar belirli commit'lere sabitlenmiştir; böylece veri sessizce değişmez.
+  - Görsel sütun ataması (Matsliah et al. 2024): FlyWire Codex
+GitHub dosyaları commit'lere, tüm dosyalar SHA-256 özetine sabitlenmiştir; veri sessizce değişmez.
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from pathlib import Path
 
 SHIU = "https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960"
 ANN = "https://raw.githubusercontent.com/flyconnectome/flywire_annotations/8587524c1748ce5ef2080822a2fc890fc03bf597"
+# FlyWire Codex genel veri kovası (v783); sürüm sabitlemesi SHA-256 ile
+CODEX = "https://storage.googleapis.com/flywire-data/codex/data/fafb/783"
 
 FILES = {
     "Completeness_783.csv": (f"{SHIU}/Completeness_783.csv",
@@ -22,6 +25,9 @@ FILES = {
                                  "efeb23fb99098e9c390f6869969b2a121a2ee92c833cfc45ecb2c1d8e1af0347"),
     "neuron_annotations.tsv": (f"{ANN}/supplemental_files/Supplemental_file1_neuron_annotations.tsv",
                                "9a4f8b2f843196074431ebd7cd883536afa1be86c8a4ce90970441e8be81d1be"),
+    # Görsel sütun ataması (Matsliah et al. 2024), retinotopik meyve kodlaması için; ~0.5 MB
+    "column_assignment.csv.gz": (f"{CODEX}/column_assignment.csv.gz",
+                                 "bdf4ce7f62cc63493d53eefad3816ff2dfd08b190e97b35a492e0e453df2f0f6"),
 }
 
 

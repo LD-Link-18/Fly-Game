@@ -103,8 +103,16 @@ class BrainConfig:
     dt_ms: float = 0.1                # Shiu et al. ile aynı; büyütmek hızlandırır ama sadakati azaltır
     # --- Kodlayıcı: oyun durumu -> duyusal nöronlara Poisson girdi hızı (Hz)
     fruit_types: list = field(default_factory=lambda: ["LC10a"])        # küçük nesne algılayıcılar
+    # "hemifield": sol/sağ grup tek hızla; "retinotopic": her nöron alıcı alan yönüne göre
+    fruit_encoding: str = "hemifield"
+    fruit_rf_deg: float = 25.0        # retinotopik: alıcı alan genişliği (Gauss sigma, derece)
+    eye_front_deg: float = -12.0      # retinotopik: gözün ön kenarı (sağ göz; negatif = orta çizginin solu)
+    eye_back_deg: float = 155.0       # retinotopik: gözün arka kenarı
     fruit_gain_hz: float = 100.0      # hız = kazanç * fruit_left/right
     fruit_max_hz: float = 200.0
+    fruit_contrast: float = 0.0       # 0..1: iki tarafın ortak kısmını çıkar (1 = yalnızca fark)
+    fruit_length: float = 250.0       # meyve görüş belirginliğinin mesafeyle azalma uzunluğu
+    fruit_side_width: float = 1.0     # sol/sağ ayrımının keskinliği (radyan; küçük = keskin)
     loom_types: list = field(default_factory=lambda: ["LPLC2", "LC4"])  # yaklaşma algılayıcılar
     loom_gain_hz: float = 150.0       # hız = kazanç * loom_left/right (rad/sn)
     loom_max_hz: float = 200.0
@@ -112,7 +120,14 @@ class BrainConfig:
     steer_types: list = field(default_factory=lambda: ["DNa01", "DNa02"])  # aynı tarafa dönüş
     turn_gain: float = 0.02           # dönüş = kazanç * (sağ Hz - sol Hz)
     turn_deadzone_hz: float = 5.0     # bu farkın altındaki dönüş komutları yok sayılır
+    steer_right_scale: float = 1.0    # sağ DN hızının çarpanı (sol/sağ yanlılığını dengelemek için)
     escape_types: list = field(default_factory=lambda: ["DNp01"])  # dev lif (kaçış)
+    # Probda LC10a uyarımına yönle derecelenen yanıt veren ek inen nöronlar:
+    front_types: list = field(default_factory=lambda: ["DNa03", "DNa11", "DNpe023"])  # önde nesne
+    lateral_types: list = field(default_factory=lambda: ["DNae002", "DNg111"])       # yan/arka nesne
+    turn_lat_weight: float = 0.0      # yan DN'lerin sağ-sol farkının dönüşe katkısı
+    turn_front_weight: float = 0.0    # ön DN'lerin sağ-sol farkının dönüşe katkısı
+    speed_front_gain: float = 0.0     # ön DN hızı (Hz) başına ileri hız değişimi
     escape_threshold_hz: float = 30.0
     rate_window_ms: float = 60.0      # çıktı hızlarının üstel ortalama penceresi
     # İleri hız: probda net bir "ileri yürü" DN sinyali çıkmadı; bu yüzden sabit bir
@@ -120,6 +135,7 @@ class BrainConfig:
     # (dev lif) varken hız escape_forward olur.
     cruise_forward: float = 0.7
     escape_forward: float = 1.0
+    turn_slowdown: float = 0.0        # 0..0.9: keskin dönüşte hız bu oranda düşer (elle kural)
 
 
 @dataclass

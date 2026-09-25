@@ -1,0 +1,27 @@
+# Sinek beyni için evrimsel arama ile ayarlanmış kodlayıcı/kod çözücü parametreleri.
+# Oluşturma: 2026-09-25 16:15, python -m flygame brain-tune
+# Arama: 14 nesil x 16 aday x 3 tohum, meyve kodlaması: retinotopic
+# Ayrılmış tohumlar (200-223): varsayılan ort. 17.62, ayarlı ort. 20.42, karıştırılmış bağlantı ağı ort. 0.00
+# Kullanım: python -m flygame play --opponent flybrain --config configs/brain_tuned_retinotopic.toml
+
+[brain]
+fruit_encoding = "retinotopic"
+fruit_gain_hz = 739.2
+fruit_max_hz = 361.8
+fruit_contrast = 0.2576
+fruit_length = 133.9
+fruit_side_width = 0.1445
+loom_gain_hz = 98.13
+loom_max_hz = 57.86
+turn_gain = 0.08118
+turn_deadzone_hz = 2.999
+steer_right_scale = 3.86
+escape_threshold_hz = 5.143
+rate_window_ms = 28.77
+cruise_forward = 0.911
+escape_forward = 0.8563
+turn_slowdown = 0.0
+fruit_rf_deg = 47.76
+turn_lat_weight = 1.434
+turn_front_weight = 0.4152
+speed_front_gain = -0.009574

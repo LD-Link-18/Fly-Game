@@ -49,7 +49,7 @@ class TestLIFSemantics(unittest.TestCase):
             b._propagate()
             b.total_steps += b.K
             for n in (0, 1):
-                spikes[n] += (blk * b.K + np.flatnonzero(S[n].numpy())).tolist()
+                spikes[n] += (blk * b.K + np.flatnonzero(S[:, 0, n].numpy())).tolist()
         return spikes
 
     def test_input_neuron_fires_every_other_step(self):
@@ -84,7 +84,7 @@ class TestWholeBrainLateralization(unittest.TestCase):
         ro = [c.find(t, s) for t, s in reads]
         b = LIFBrain(c, inp, np.concatenate(ro), device="cuda", seed=1)
         b.set_input_rates(np.full(len(inp), 150.0, np.float32))
-        cnt = b.run(int(round(400 / b.block_ms)))
+        cnt = b.run(int(round(400 / b.block_ms)))[0]
         out, i = [], 0
         for idx in ro:
             out.append(cnt[i:i + len(idx)].mean() / 0.4)

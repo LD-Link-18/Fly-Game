@@ -49,7 +49,7 @@ def run_probe(data_dir: str, device: str, stim_sets=DEFAULT_STIM, read_types=DEF
             rates[[pos[n] for n in groups[key]]] = rate_hz
         brain.set_input_rates(rates)
         t0 = time.perf_counter()
-        counts = brain.run(n_blocks)
+        counts = brain.run(n_blocks)[0]
         wall = time.perf_counter() - t0
         secs = n_blocks * brain.block_ms / 1000.0
         out, i = [], 0

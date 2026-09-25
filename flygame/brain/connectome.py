@@ -54,6 +54,19 @@ class Connectome:
         return np.flatnonzero(m)
 
 
+def shuffled(conn: Connectome, seed: int) -> Connectome:
+    """Kontrol deneyi için karıştırılmış bağlantı ağı.
+
+    Her bağlantının hedefi rastgele başka bir bağlantının hedefiyle değiştirilir:
+    her nöronun çıkış ve giriş bağlantı sayısı ile ağırlık dağılımı korunur,
+    ama "kim kime bağlı" bilgisi yok edilir. Nöron kimlikleri (girdi/çıktı
+    tipleri) aynı kalır.
+    """
+    rng = np.random.default_rng(seed)
+    return Connectome(conn.root_ids, conn.rowptr, rng.permutation(conn.post), conn.weight,
+                      conn.cell_type, conn.hb_type, conn.side)
+
+
 def build_cache(data_dir: Path = DATA_DIR) -> Path:
     import pandas as pd  # yalnızca önbellek oluştururken gerekli
 

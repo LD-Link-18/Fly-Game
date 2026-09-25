@@ -1,0 +1,22 @@
+# Sinek beyni için evrimsel arama ile ayarlanmış kodlayıcı/kod çözücü parametreleri.
+# Oluşturma: 2026-09-25 12:02, python -m flygame brain-tune
+# Arama: 14 nesil x 16 aday x 3 tohum
+# Ayrılmış tohumlar (1-24): varsayılan ort. 19.79, ayarlı ort. 20.96, karıştırılmış bağlantı ağı ort. 0.00
+# Kullanım: python -m flygame play --opponent flybrain --config configs/brain_tuned.toml
+
+[brain]
+fruit_gain_hz = 759.3
+fruit_max_hz = 345.3
+fruit_contrast = 0.2576
+fruit_length = 98.84
+fruit_side_width = 0.1445
+loom_gain_hz = 83.92
+loom_max_hz = 71.36
+turn_gain = 0.0794
+turn_deadzone_hz = 4.428
+steer_right_scale = 3.252
+escape_threshold_hz = 16.84
+rate_window_ms = 62.15
+cruise_forward = 0.8543
+escape_forward = 0.9924
+turn_slowdown = 0.04698

@@ -42,11 +42,13 @@ A PyTorch/GPU port of the leaky integrate-and-fire whole-brain model of
 138,639 neurons and 15.1M connections from FlyWire v783, same equations,
 parameters and 0.1 ms time step. The port matches the Brian2 reference
 spike-for-spike on deterministic input and statistically on Poisson input.
-On an RTX 4070 Laptop GPU it runs at about 1.4x real time inside the game.
+A fused Triton kernel runs one brain at about 2.2x real time inside the game on an
+RTX 4070 Laptop GPU, or ~32 brains in parallel at ~14 brain-seconds per second for tuning.
+Results are deterministic: same seed and inputs, same spikes.
 
 ```bash
 .venv/bin/pip install -r requirements-brain.txt           # ~3 GB (PyTorch + CUDA)
-.venv/bin/python -m flygame brain-download                # FlyWire data, ~136 MB, checksummed
+.venv/bin/python -m flygame brain-download                # FlyWire data, ~137 MB, checksummed
 .venv/bin/python -m flygame brain-probe                   # left/right stimulus -> DN responses
 .venv/bin/python -m flygame play --opponent flybrain
 ```
@@ -62,6 +64,55 @@ How the game talks to the brain (all choices, gains and thresholds are in `[brai
   DN signal came out of the probe) and the input/output mappings themselves.
 - What comes from the connectome: object on the left makes left DNa02 fire (turn toward),
   looming on the left makes right DNa01/DNa02 and the giant fiber fire (turn away, escape).
+
+### Fruit vision: hemifield vs retinotopic
+
+`[brain] fruit_encoding` picks how fruit reaches the brain:
+
+- `hemifield`: every left LC10a neuron gets the same rate (fruit on the left), same for
+  the right. The brain only learns *left or right*.
+- `retinotopic`: each LC10a neuron is driven by how close the fruit is to where that neuron
+  looks, so the brain also learns *how far* left or right. Receptive-field directions are
+  estimated from the connectome (`flygame/brain/retinotopy.py`): FlyWire's column
+  assignment (Matsliah et al. 2024) places 31 columnar cell types on the eye's hexagonal
+  grid; each LC10a's center is the synapse-weighted average column of its inputs, mapped
+  linearly to -12°..155° per eye. That mapping is an approximation of the real eye map.
+
+What the connectome does with that direction information (probe, 12 LC10a neurons per
+azimuth bin): DNa02 steers toward objects mostly at 45–75° and ignores objects behind
+(~140°); DNa03/DNa11/DNpe023 respond to objects straight ahead; DNae002/DNg111 to objects
+at the side/rear. The decoder can therefore add the side neurons to turning
+(`turn_lat_weight`) and let the front neurons raise speed (`speed_front_gain`); with those
+weights at 0 it is the original DNa01/DNa02 decoder.
+
+Result so far (each encoding tuned with `brain-tune`, then compared on the same 24 hold-out
+seeds 200–223): hemifield `configs/brain_tuned.toml` 21.6 ± 5.4, retinotopic
+`configs/brain_tuned_retinotopic.toml` 20.4 ± 3.5. The difference is within noise; the
+retinotopic fly is more consistent (worst round 15 vs 12) but does not score higher. The
+search widened the receptive fields to ~48°, i.e. it preferred blurrier direction input:
+the LC10a→DNa02 pursuit pathway ignores objects behind the fly, and this game rewards
+turning toward fruit anywhere.
+
+### Tuning the fly (Phase 4)
+
+```bash
+# Score distribution of the fly brain over many seeds (runs up to 32 brains at once)
+.venv/bin/python -m flygame brain-eval --seeds 1-64 --compare
+# Same, but on a shuffled connectome: a control for "does the wiring matter?"
+.venv/bin/python -m flygame brain-eval --seeds 1-64 --shuffle-seed 1
+# Evolutionary search over the encoder/decoder numbers (gains, thresholds, cruise speed);
+# writes a best-so-far checkpoint to runs/tuning/ after every generation
+.venv/bin/python -m flygame brain-tune --generations 12 --pop 16 --seeds-per-gen 2
+# Progress and time left of a running search (or: watch -n 30 ... to keep it on screen)
+.venv/bin/python -m flygame tune-status
+.venv/bin/python -m flygame play --opponent flybrain --config configs/brain_tuned.toml
+```
+
+The search only changes the numbers in `[brain]` that sit *between* the game and the
+brain (listed in `flygame/brain/interface.py`, `TUNABLE`); the connectome and the neuron
+model are never modified. It trains on seeds 10000+, then reports default vs tuned on
+hold-out seeds it never saw, the tuned settings on a shuffled connectome, and the bots.
+Logs go to `runs/tuning/`.
 
 ## Headless tools
 

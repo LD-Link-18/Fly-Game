@@ -19,9 +19,8 @@ sonraki blokta etki eder. Bu yüzden bir bloğun tüm sinaptik girdisi, önceki
 bloğun spike'larından tek seferde (olay güdümlü) hesaplanır; blok içindeki K
 nöron adımı ise tek bir CUDA grafiği olarak yakalanıp çalıştırılır.
 
-Not: GPU'da atomik toplama sırası değiştiği ve Poisson girdisi rastgele
-olduğu için iki koşu bit düzeyinde aynı değildir (oyun tekrarları bundan
-etkilenmez: tekrar, beyin çıktısını değil kaydedilmiş eylemleri kullanır).
+Sinaptik girdiler belirlenimci (sıralamalı) biçimde toplanır: aynı tohum ve
+aynı girdi, her koşuda bit düzeyinde aynı sonucu verir (ayarlama için önemli).
 """
 
 from __future__ import annotations
@@ -33,6 +32,14 @@ import numpy as np
 import torch
 
 from .connectome import Connectome
+
+
+def _triton_ok() -> bool:
+    try:
+        import triton  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -51,13 +58,22 @@ class LIFParams:
 
 
 class LIFBrain:
+    """Toplu (batch) LIF beyni: B bağımsız beyin aynı bağlantı ağını paylaşır.
+
+    Her üye kendi durumuna, girdisine ve spike'larına sahiptir; aralarında
+    etkileşim yoktur. B > 1, ayarlama sırasında birçok aday parametreyi veya
+    tohumu tek GPU üzerinde aynı anda değerlendirmek içindir.
+    """
+
     def __init__(self, conn: Connectome, input_idx: np.ndarray, readout_idx: np.ndarray,
                  device: str = "cuda", params: LIFParams = LIFParams(), seed: int = 0,
-                 use_cuda_graph: bool = True, dtype: torch.dtype = torch.float32):
+                 use_cuda_graph: bool = True, dtype: torch.dtype = torch.float32, batch: int = 1,
+                 backend: str = "auto"):
         p = self.p = params
         self.device = torch.device(device)
         dev = self.device
         self.dtype = dtype
+        self.B = int(batch)
         self.N = conn.n_neurons
         self.K = int(round(p.t_dly / p.dt))  # blok uzunluğu = sinaptik gecikme (adım)
         if self.K < 1:
@@ -77,33 +93,56 @@ class LIFBrain:
         # Girdi (duyusal) ve çıktı (okunan) nöronlar
         self.input_idx = torch.as_tensor(np.asarray(input_idx, dtype=np.int64), device=dev)
         self.readout_idx = torch.as_tensor(np.asarray(readout_idx, dtype=np.int64), device=dev)
-        self.input_p = torch.zeros(len(input_idx), device=dev)  # adım başına spike olasılığı
+        self.input_p = torch.zeros(self.B, len(input_idx), device=dev)  # adım başına spike olasılığı
         self.w_poi = p.w_syn * p.f_poi
 
-        rfc = torch.full((self.N,), int(round(p.t_rfc / p.dt)), dtype=torch.int64, device=dev)
+        rfc = torch.full((self.N,), int(round(p.t_rfc / p.dt)), dtype=torch.int32, device=dev)
         rfc[self.input_idx] = 0  # Shiu: Poisson hedeflerinin refrakter süresi yok
         self.rfc_steps = rfc
+
+        # Arka uç: "triton" = birleşik GPU çekirdeği (hızlı), "torch" = PyTorch işlemleri
+        # (CPU'da da çalışır; referans uygulama). "auto" CUDA'da Triton'u seçer.
+        if backend == "auto":
+            backend = "triton" if (dev.type == "cuda" and dtype == torch.float32 and _triton_ok()) else "torch"
+        self.backend = backend
+        if backend == "triton":
+            if len(np.unique(np.asarray(input_idx))) != len(input_idx):
+                raise ValueError("input neurons must be unique for the triton backend")
+            slot = torch.full((self.N,), -1, dtype=torch.int32, device=dev)
+            slot[self.input_idx] = torch.arange(len(input_idx), dtype=torch.int32, device=dev)
+            self.slot = slot
+        if len(np.unique(np.asarray(readout_idx))) != len(readout_idx):
+            raise ValueError("readout neurons must be unique")
+        lut = torch.full((self.N,), -1, dtype=torch.int64, device=dev)
+        lut[self.readout_idx] = torch.arange(len(readout_idx), device=dev)
+        self.readout_lut = lut
 
         # Rastgelelik varsayılan RNG'den gelir (CUDA grafikleri bunu güvenle yakalar)
         self._seed(seed)
         self._alloc_state()
         self._graph = None
-        self._use_graph = use_cuda_graph and dev.type == "cuda"
+        self._use_graph = use_cuda_graph and dev.type == "cuda" and backend == "torch"
 
     # -- durum ---------------------------------------------------------------------
 
     def _alloc_state(self) -> None:
-        dev, N, K = self.device, self.N, self.K
-        self.v = torch.full((N,), self.p.v_0, device=dev, dtype=self.dtype)
-        self.g = torch.zeros(N, device=dev, dtype=self.dtype)
-        self.ref_until = torch.zeros(N, dtype=torch.int64, device=dev)
-        self.step = torch.zeros((), dtype=torch.int64, device=dev)
-        self.I = torch.zeros(N, K, device=dev, dtype=self.dtype)       # bu bloğun gelen sinaptik girdisi
-        self.S = torch.zeros(N, K, dtype=torch.bool, device=dev)  # bu bloğun spike'ları
-        self.readout_counts = torch.zeros(len(self.readout_idx), device=dev)
-        self.spike_total = torch.zeros((), device=dev)  # run() sırasında tüm beyindeki spike sayısı
-        self.last_spikes = 0
+        dev, B, N, K = self.device, self.B, self.N, self.K
+        self.v = torch.full((B, N), self.p.v_0, device=dev, dtype=self.dtype)
+        self.g = torch.zeros(B, N, device=dev, dtype=self.dtype)
+        self.ref_until = torch.zeros(B, N, dtype=torch.int32, device=dev)
+        self.step = torch.zeros((), dtype=torch.int32, device=dev)
+        # Adım (k) ilk boyutta: her adımda okunan/yazılan dilim bellekte bitişik olsun
+        self.I = torch.zeros(K, B, N, device=dev, dtype=self.dtype)       # bu bloğun gelen sinaptik girdisi
+        self.S = torch.zeros(K, B, N, dtype=torch.bool, device=dev)      # bu bloğun spike'ları
+        self.readout_counts = torch.zeros(B, len(self.readout_idx), device=dev)
+        self.spike_total = torch.zeros(B, device=dev)  # run() sırasında üye başına tüm beyindeki spike sayısı
+        self.last_spikes = np.zeros(B)
         self.total_steps = 0
+        if self.backend == "triton":
+            # En kötü durum: her nöron blokta bir kez, girdi nöronları (refrakter 0) her 2 adımda bir
+            max_events = B * (N + (K // 2 + 1) * len(self.input_idx)) + 16
+            self.events = torch.zeros(max_events, dtype=torch.int32, device=dev)
+            self.ev_count = torch.zeros(1, dtype=torch.int32, device=dev)
 
     def reset(self, seed: int | None = None) -> None:
         """Beyni dinlenme durumuna döndür (her tur başında)."""
@@ -119,9 +158,9 @@ class LIFBrain:
         self.total_steps = 0
 
     def set_input_rates(self, rates_hz: np.ndarray) -> None:
-        """Her duyusal nöron için Poisson girdi hızı (Hz)."""
+        """Her duyusal nöron için Poisson girdi hızı (Hz); şekil (M,) veya (B, M)."""
         prob = np.clip(np.asarray(rates_hz, dtype=np.float32) * (self.p.dt / 1000.0), 0.0, 1.0)
-        self.input_p.copy_(torch.from_numpy(prob), non_blocking=True)
+        self.input_p.copy_(torch.from_numpy(np.broadcast_to(prob, self.input_p.shape).copy()), non_blocking=True)
 
     def _seed(self, seed: int) -> None:
         if self.device.type == "cuda":
@@ -145,17 +184,17 @@ class LIFBrain:
             spike = (v > p.v_th) & active
             # Gecikmeli sinaptik girdi ve Poisson duyusal girdi. Brian2'de ("unless
             # refractory") refrakter nörona gelen sinaptik girdi kaybolur; aynısı yapılır.
-            g.add_(torch.where(active, self.I[:, k], 0.0))
+            g.add_(torch.where(active, self.I[k], 0.0))
             poi = torch.rand(self.input_p.shape, device=self.device) < self.input_p
-            v.index_add_(0, self.input_idx, poi.to(self.dtype) * self.w_poi)
+            v.index_add_(1, self.input_idx, poi.to(self.dtype) * self.w_poi)
             # Sıfırlama
             v.masked_fill_(spike, p.v_rst)
             g.masked_fill_(spike, 0.0)
             self.ref_until.copy_(torch.where(spike, self.step + self.rfc_steps, self.ref_until))
-            self.S[:, k] = spike
+            self.S[k] = spike
             self.step.add_(1)
-        self.readout_counts.add_(self.S[self.readout_idx].sum(dim=1).float())
-        self.spike_total.add_(self.S.sum().float())
+        self.readout_counts.add_(self.S[:, :, self.readout_idx].sum(dim=0).float())
+        self.spike_total.add_(self.S.sum(dim=(0, 2)).float())
 
     def _propagate(self) -> None:
         # Bu bloğun spike'larını sonraki bloğun sinaptik girdisine çevir (olay güdümlü)
@@ -163,7 +202,10 @@ class LIFBrain:
         self.I.zero_()
         if nz.numel() == 0:
             return
-        n_idx, k_idx = nz[:, 0], nz[:, 1]
+        self._deliver(nz[:, 0], nz[:, 1], nz[:, 2])
+
+    def _deliver(self, k_idx, b_idx, n_idx) -> None:
+        # Her spike'ın tüm çıkış sinapslarını sonraki bloğun I dizisine ekle
         starts = self.rowptr[n_idx]
         counts = self.rowptr[n_idx + 1] - starts
         total = int(counts.sum())
@@ -172,10 +214,55 @@ class LIFBrain:
         rep = torch.repeat_interleave(torch.arange(len(n_idx), device=self.device), counts, output_size=total)
         first = torch.cumsum(counts, 0) - counts
         syn = starts[rep] + (torch.arange(total, device=self.device) - first[rep])
-        flat = self.post[syn] * self.K + k_idx[rep]
-        self.I.view(-1).index_add_(0, flat, self.w[syn])
+        flat = (k_idx[rep] * self.B + b_idx[rep]) * self.N + self.post[syn]
+        # Belirlenimci toplama: atomik float toplamanın sırası her koşuda değişir ve eşiğe
+        # çok yakın nöronlarda spike'ı bir adım kaydırabilir. Sıralamalı (deterministik)
+        # birikimle aynı tohum + aynı girdi her zaman aynı sonucu verir.
+        prev = torch.are_deterministic_algorithms_enabled()
+        torch.use_deterministic_algorithms(True)
+        try:
+            self.I.view(-1).index_put_((flat,), self.w[syn], accumulate=True)
+        finally:
+            torch.use_deterministic_algorithms(prev)
+
+    def _triton_block(self) -> None:
+        from . import lif_triton
+
+        p, B, N, K = self.p, self.B, self.N, self.K
+        M = len(self.input_idx)
+        pois = (torch.rand((K, B, max(M, 1)), device=self.device) < self.input_p[:, :max(M, 1)]
+                if M else torch.zeros((K, B, 1), device=self.device, dtype=torch.bool)).to(torch.uint8)
+        self.ev_count.zero_()
+        lif_triton.launch(self.v, self.g, self.ref_until, self.rfc_steps, self.slot, self.I, pois,
+                          self.events, self.ev_count, self.total_steps, B, N, M,
+                          p.v_0, p.v_th, p.v_rst, self.ev, self.eg, self.cg, self.w_poi, K)
+        # I bu blokta tüketildi; çekirdek içinde okunup sıfırlanması (aynı adrese yükle+yaz)
+        # sonucu belirlenimsiz yapıyordu, bu yüzden ayrı bir memset ile sıfırlanır
+        self.I.zero_()
+        n_ev = int(self.ev_count.item())
+        if n_ev == 0:
+            return
+        # Sıralama: çekirdek olayları rastgele sırada yazar; toplama sırası (ve dolayısıyla
+        # float yuvarlaması) torch yoluyla aynı ve her koşuda aynı olsun diye sıralanır
+        e = torch.sort(self.events[:n_ev].long()).values
+        n_idx = e % N
+        kb = e // N
+        b_idx = kb % B
+        k_idx = kb // B
+        # Okuma nöronları ve toplam spike sayısı (üye başına)
+        r = self.readout_lut[n_idx]
+        m = r >= 0
+        R = self.readout_counts.shape[1]
+        self.readout_counts.view(-1).index_add_(0, b_idx[m] * R + r[m],
+                                                torch.ones(int(m.sum()), device=self.device))
+        self.spike_total.index_add_(0, b_idx, torch.ones(n_ev, device=self.device))
+        self._deliver(k_idx, b_idx, n_idx)
 
     def _run_block(self) -> None:
+        if self.backend == "triton":
+            self._triton_block()
+            self.total_steps += self.K
+            return
         if self._use_graph:
             if self._graph is None:
                 self._capture()
@@ -202,12 +289,12 @@ class LIFBrain:
             dst.copy_(src)
 
     def run(self, n_blocks: int) -> np.ndarray:
-        """n_blocks blok çalıştır; okunan nöronların bu süredeki spike sayılarını döndür."""
+        """n_blocks blok çalıştır; (B, R) şeklinde okuma nöronu spike sayılarını döndür."""
         self.readout_counts.zero_()
         self.spike_total.zero_()
         for _ in range(n_blocks):
             self._run_block()
-        self.last_spikes = int(self.spike_total.item())
+        self.last_spikes = self.spike_total.cpu().numpy()
         return self.readout_counts.cpu().numpy()
 
     @property
