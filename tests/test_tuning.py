@@ -195,10 +195,9 @@ class TestShuffleControl(unittest.TestCase):
 
 @unittest.skipIf(torch is None or not torch.cuda.is_available(), "needs CUDA")
 class TestTritonBackend(unittest.TestCase):
-    def test_matches_torch_and_is_deterministic(self):
-        from flygame.brain.lif_torch import LIFBrain
-
-        # Rastgele ama sabit küçük bir ağ; deterministik girdi (her adım bir girdi spike'ı)
+    @staticmethod
+    def net():
+        # Rastgele ama sabit küçük bir ağ
         from flygame.brain.connectome import Connectome
 
         rng = np.random.default_rng(3)
@@ -207,7 +206,32 @@ class TestTritonBackend(unittest.TestCase):
         rowptr = np.concatenate([[0], np.cumsum(np.bincount(pre, minlength=n))])
         post = rng.integers(0, n, e).astype(np.int32)
         w = rng.choice([-3.0, 1.0, 2.0, 5.0], e).astype(np.float32)
-        c = Connectome(np.arange(n), rowptr, post, w, np.array([""] * n), np.array([""] * n), np.array([""] * n))
+        return Connectome(np.arange(n), rowptr, post, w, np.array([""] * n), np.array([""] * n),
+                          np.array([""] * n))
+
+    def test_track_fired_member0_only(self):
+        # Beyin haritası: iki arka uçta da yalnızca ilk üyenin ateşleyen nöronları listelenir
+        from flygame.brain.lif_torch import LIFBrain
+
+        c = self.net()
+        inputs = np.arange(40)
+        for backend in ("torch", "triton"):
+            b = LIFBrain(c, inputs, np.arange(c.n_neurons), device="cuda", backend=backend, batch=2,
+                         use_cuda_graph=False, track_fired=True)
+            r = np.zeros((2, len(inputs)), np.float32)
+            r[0, :20] = 10000.0
+            r[1, 20:] = 10000.0
+            b.reset(0)
+            b.set_input_rates(r)
+            counts = b.run(20)
+            np.testing.assert_array_equal(b.last_fired, np.flatnonzero(counts[0] > 0), err_msg=backend)
+            self.assertFalse(np.array_equal(counts[0] > 0, counts[1] > 0))
+
+    def test_matches_torch_and_is_deterministic(self):
+        from flygame.brain.lif_torch import LIFBrain
+
+        # Deterministik girdi (her adım bir girdi spike'ı)
+        c = self.net()
         inputs = np.arange(40)
 
         def spikes(backend, batch=1, member=0):

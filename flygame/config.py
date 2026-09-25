@@ -173,7 +173,7 @@ class StandConfig:
     leaderboard_size: int = 10
     leaderboard_scope: str = "all"  # "all" (tümü) veya "today" (yalnızca bugün)
     initials: bool = True           # listeye giren ziyaretçiden 3 harf iste
-    neuron_panel: bool = True       # rakibin yanında nöron etkinliği paneli
+    neuron_panel: bool = True       # rakibin yanında beyin haritası paneli
 
 
 @dataclass

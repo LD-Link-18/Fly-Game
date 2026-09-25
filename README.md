@@ -139,11 +139,22 @@ choose opponent → 3-2-1 → 40 s round → result and prize → 3 initials if 
 the top 10 → leaderboard. Rounds where the visitor never touched the controls are not
 recorded.
 
-**Neuron panel** (right of the fly): a scrolling spike raster of 192 real neurons from
-the simulation (the stimulated eye neurons, the 96 central-brain neurons that get the
-most input from them, and the descending neurons the decoder reads), what the eyes
-report, what the brain commands, and the whole-brain spike rate. It says LIVE for the
-running simulation and RECORDED for replays; bots get a "no brain" card.
+**Brain map** (right of the fly): every one of the 138,639 simulated neurons is a dot at
+its real position in the FlyWire brain (`pos_x/y/z` from the FlyWire annotations,
+`flygame/brain/brainmap.py`), drawn as a dim LED-style map, seen from behind (the fly's
+left is on screen-left) and from above (head up, like the fly in the game). When a neuron
+fires in the simulation, its dot lights up and fades within ~60 ms, so what you see is the
+whole brain's spikes, not a sample or an animation. Colours: green = the eye neurons fed
+with fruit (LC10a), red = the eye neurons fed with the swatter (LPLC2, LC4), orange = the
+decision neurons the game reads (they also get a ring when they fire), blue = every other
+neuron. Under the map, "TO THE LEGS" shows the turn command and giant-fiber escapes.
+The panel says LIVE for the running simulation and RECORDED for replays; bots get a
+"no brain" card. The map needs `data/flywire` (from `brain-download`); a small position
+cache (`brain_map_783.npz`) is built from it on first use, without pandas or torch.
+
+Recordings of the fly brain store every tick's spiking neurons (packed as one bit matrix
+over the neurons that fired during the round, ~0.5 MB per round), so replays show the
+recorded activity. Recordings made before the brain map have no map data; the panel says so.
 
 **Prize rule** (`[prize]` in `configs/stand.toml`): a visitor wins a prize by beating an
 eligible opponent (default: the fly brain, including its recorded replays) by at least
