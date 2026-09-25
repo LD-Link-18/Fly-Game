@@ -1,0 +1,9 @@
+# Sinek beyni rakibi için ek bağımlılıklar (isteğe bağlı).
+# Kurulum: pip install -r requirements.txt -r requirements-brain.txt
+# Not: ~3 GB (PyTorch + CUDA kütüphaneleri). Canlı çalışma için NVIDIA GPU gerekir.
+torch>=2.4
+# Yalnızca ilk seferde ham FlyWire verisinden önbellek oluşturmak için:
+pandas>=2.0
+fastparquet>=2024.2
+# Brian2 yalnızca referans karşılaştırması içindir (oyun için gerekmez):
+# brian2>=2.7

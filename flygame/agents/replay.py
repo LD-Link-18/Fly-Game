@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import random
 import sys
+import time
 from pathlib import Path
 
 from ..actions import Action
@@ -78,6 +79,10 @@ class ReplayAgent(Agent):
         if tel and 0 <= tick < len(tel):
             return tel[tick]
         return None
+
+    def ui_note(self, lang: str = "en") -> str:
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(self.rec.created))
+        return f"kayıt: {when}, tohum {self.rec.seed}" if lang == "tr" else f"recorded {when}, seed {self.rec.seed}"
 
     @property
     def source_kind(self) -> str:

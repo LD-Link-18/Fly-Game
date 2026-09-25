@@ -3,6 +3,8 @@
   python -m flygame play   [--opponent scripted] [--seed N] [--config f.toml] [--fullscreen] [--lang tr]
   python -m flygame record --agent scripted --seeds 1-20 [--out runs/scripted]
   python -m flygame verify runs/x.json.gz
+  python -m flygame brain-download         # FlyWire verisini indir (~136 MB)
+  python -m flygame brain-probe            # sinek beyni: sol/sağ uyarım -> DN yanıtları
 """
 
 from __future__ import annotations
@@ -40,15 +42,15 @@ def cmd_play(args) -> None:
         cfg.display.sound = False
     from .app import App
 
-    App(cfg, make_agent(args.opponent), args.seed).run()
+    App(cfg, make_agent(args.opponent, cfg), args.seed).run()
 
 
 def cmd_record(args) -> None:
     cfg = load_config(args.config)
     out = Path(args.out or f"runs/{args.agent.replace(':', '_').replace('/', '_')}")
     scores = []
+    agent = make_agent(args.agent, cfg)  # bir kez oluştur (sinek beyni yüklemesi pahalı)
     for seed in parse_seeds(args.seeds):
-        agent = make_agent(args.agent)
         res = run_round(agent, seed, cfg, record=True)
         path = res.recording.save(out / f"seed{seed}_{agent.name}.json.gz")
         scores.append(res.score)
@@ -78,12 +80,30 @@ def cmd_verify(args) -> None:
     sys.exit(0 if ok else 1)
 
 
+def cmd_brain_probe(args) -> None:
+    from .brain.probe import run_probe
+
+    cfg = load_config(args.config)
+    run_probe(cfg.brain.data_dir, args.device or cfg.brain.device, dt_ms=cfg.brain.dt_ms)
+
+
+def cmd_brain_download(args) -> None:
+    from .brain.download import download_all
+
+    cfg = load_config(args.config)
+    download_all(cfg.brain.data_dir)
+    from .brain.connectome import load_connectome
+
+    c = load_connectome(cfg.brain.data_dir)
+    print(f"connectome ready: {c.n_neurons} neurons, {c.n_connections} connections")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="flygame")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("play", help="run the split-screen game")
-    p.add_argument("--opponent", default="scripted", help="scripted | heuristic | replay:<file-or-dir>")
+    p.add_argument("--opponent", default="scripted", help="scripted | heuristic | flybrain | replay:<file-or-dir>")
     p.add_argument("--seed", type=int, default=None, help="fixed seed for every round")
     p.add_argument("--config", default=None, help="TOML file with setting overrides")
     p.add_argument("--fullscreen", action="store_true")
@@ -102,6 +122,15 @@ def main() -> None:
     p.add_argument("paths", nargs="+")
     p.add_argument("--config", default=None)
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("brain-download", help="download FlyWire v783 data (~136 MB) and build the cache")
+    p.add_argument("--config", default=None)
+    p.set_defaults(func=cmd_brain_download)
+
+    p = sub.add_parser("brain-probe", help="check left/right sensory -> descending neuron responses")
+    p.add_argument("--config", default=None)
+    p.add_argument("--device", default=None, help="override brain.device (cuda/cpu)")
+    p.set_defaults(func=cmd_brain_probe)
 
     args = ap.parse_args()
     args.func(args)

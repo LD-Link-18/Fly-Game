@@ -95,6 +95,34 @@ class HeuristicConfig:
 
 
 @dataclass
+class BrainConfig:
+    # Sinek beyni adaptörü (bkz. flygame/agents/flybrain.py). Nöron tipleri FlyWire
+    # tipidir; "hb:" öneki hemibrain adını seçer (örn. "hb:DNa01").
+    data_dir: str = "data/flywire"
+    device: str = "cuda"              # "cuda" veya "cpu" (cpu çok yavaştır)
+    dt_ms: float = 0.1                # Shiu et al. ile aynı; büyütmek hızlandırır ama sadakati azaltır
+    # --- Kodlayıcı: oyun durumu -> duyusal nöronlara Poisson girdi hızı (Hz)
+    fruit_types: list = field(default_factory=lambda: ["LC10a"])        # küçük nesne algılayıcılar
+    fruit_gain_hz: float = 100.0      # hız = kazanç * fruit_left/right
+    fruit_max_hz: float = 200.0
+    loom_types: list = field(default_factory=lambda: ["LPLC2", "LC4"])  # yaklaşma algılayıcılar
+    loom_gain_hz: float = 150.0       # hız = kazanç * loom_left/right (rad/sn)
+    loom_max_hz: float = 200.0
+    # --- Kod çözücü: inen (descending) nöronların hızı -> eylem
+    steer_types: list = field(default_factory=lambda: ["DNa01", "DNa02"])  # aynı tarafa dönüş
+    turn_gain: float = 0.02           # dönüş = kazanç * (sağ Hz - sol Hz)
+    turn_deadzone_hz: float = 5.0     # bu farkın altındaki dönüş komutları yok sayılır
+    escape_types: list = field(default_factory=lambda: ["DNp01"])  # dev lif (kaçış)
+    escape_threshold_hz: float = 30.0
+    rate_window_ms: float = 60.0      # çıktı hızlarının üstel ortalama penceresi
+    # İleri hız: probda net bir "ileri yürü" DN sinyali çıkmadı; bu yüzden sabit bir
+    # seyir hızı ELLE belirlenir (arayüzde ve kodda açıkça belirtilir). Kaçış sinyali
+    # (dev lif) varken hız escape_forward olur.
+    cruise_forward: float = 0.7
+    escape_forward: float = 1.0
+
+
+@dataclass
 class DisplayConfig:
     width: int = 1600
     height: int = 900
@@ -125,6 +153,7 @@ class GameConfig:
     score: ScoreConfig = field(default_factory=ScoreConfig)
     sensory: SensoryConfig = field(default_factory=SensoryConfig)
     heuristic: HeuristicConfig = field(default_factory=HeuristicConfig)
+    brain: BrainConfig = field(default_factory=BrainConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
 
@@ -139,7 +168,7 @@ class GameConfig:
         ajan ayarları (eylemleri değiştirir, dünyayı değil) dahil değildir.
         """
         d = self.to_dict()
-        for key in ("display", "recording", "heuristic"):
+        for key in ("display", "recording", "heuristic", "brain"):
             d.pop(key)
         blob = json.dumps(d, sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:16]

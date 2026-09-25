@@ -415,14 +415,16 @@ class Renderer:
         if world is not None and world.stunned:
             self.blit_text(self.tx["stunned"], "small", (255, 90, 90), midbottom=(rect.centerx, y))
 
-    def draw_badge(self, idx: int, label: str, kind: AgentKind) -> None:
+    def draw_badge(self, idx: int, label: str, kind: AgentKind, note: str | None = None) -> None:
         rect = self.panels[idx]
         col = KIND_BADGE.get(kind, DIM)
         surf = self.text(label, "small", (15, 15, 20))
         pad = 8
-        box = surf.get_rect(midtop=(rect.centerx, rect.bottom + int(self.H * 0.015))).inflate(2 * pad, pad)
+        box = surf.get_rect(midtop=(rect.centerx, rect.bottom + int(self.H * 0.012))).inflate(2 * pad, pad)
         pygame.draw.rect(self.screen, col, box, border_radius=6)
         self.screen.blit(surf, surf.get_rect(center=box.center))
+        if note:
+            self.blit_text(note, "tiny", DIM, midtop=(rect.centerx, box.bottom + 3))
 
     def draw_timer(self, time_left: float) -> None:
         secs = int(math.ceil(time_left))

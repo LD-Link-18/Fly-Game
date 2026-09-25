@@ -219,3 +219,6 @@ __marimo__/
 
 # Oyun kayıtları (tur tekrarları)
 runs/
+
+# İndirilen konnektom verisi (büyük dosyalar)
+data/

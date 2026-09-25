@@ -192,7 +192,7 @@ class App:
         for i, world in enumerate(self.worlds):
             r.draw_panel(i, world, colors[i], now)
             r.draw_header(i, names[i], world.score, colors[i], world)
-            r.draw_badge(i, agents[i].label(self.lang), agents[i].kind)
+            r.draw_badge(i, agents[i].label(self.lang), agents[i].kind, agents[i].ui_note(self.lang))
         r.draw_timer(self.worlds[0].time_left)
 
         if self.state == "countdown":
@@ -212,6 +212,9 @@ class App:
                     center=(r.W // 2, int(r.H * 0.40)))
         r.blit_text(f"{tx['opponent']}:", "small", DIM, center=(r.W // 2, int(r.H * 0.50)))
         r.blit_text(self.opponent.label(self.lang), "mid", OPPONENT_COLOR, center=(r.W // 2, int(r.H * 0.56)))
+        note = self.opponent.ui_note(self.lang)
+        if note:
+            r.blit_text(note, "small", DIM, center=(r.W // 2, int(r.H * 0.61)))
         r.blit_text(tx["controls"], "small", TEXT, center=(r.W // 2, int(r.H * 0.70)))
         if int(self.state_t * 2) % 2 == 0:
             r.blit_text(tx["press_start"], "mid", (120, 255, 140), center=(r.W // 2, int(r.H * 0.82)))

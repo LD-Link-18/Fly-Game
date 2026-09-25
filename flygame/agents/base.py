@@ -66,6 +66,10 @@ class Agent(ABC):
     def label(self, lang: str = "en") -> str:
         return KIND_LABELS.get(lang, KIND_LABELS["en"])[self.kind]
 
+    def ui_note(self, lang: str = "en") -> str | None:
+        """İsteğe bağlı ikinci satır: ajanın hangi kısmının elle yazıldığını açıklar."""
+        return None
+
     def describe(self) -> dict:
         # Kayıt dosyalarına yazılan kimlik bilgisi
         return {"name": self.name, "kind": self.kind.value}
