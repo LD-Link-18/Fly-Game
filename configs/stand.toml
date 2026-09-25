@@ -1,0 +1,21 @@
+# Stant ayarları: ödül kuralı, skor tablosu, kiosk davranışı.
+# Ayarlanmış beyin ayarlarıyla birlikte kullanılır (sonraki dosya öncekini ezer):
+#   python -m flygame play --config configs/brain_tuned.toml --config configs/stand.toml --kiosk
+# veya kısaca: ./kiosk.sh
+
+[prize]
+enabled = true
+margin = 1                 # sinek beyninden en az bu kadar fazla puan (1 = beraberlik yetmez)
+min_score = 0              # ödül için en düşük puan
+eligible = ["fly_brain"]   # ödül veren rakipler (sinek beyninin kayıttan tekrarı dahil)
+max_per_day = 0            # günlük ödül stoğu; 0 = sınırsız
+
+[stand]
+leaderboard_path = "runs/stand/leaderboard.json"
+leaderboard_size = 10
+leaderboard_scope = "all"  # "today" = tablo her gün sıfırdan görünür (eski kayıtlar silinmez)
+initials = true
+neuron_panel = true
+idle_return_s = 40.0
+attract_page_s = 8.0
+exit_hold_s = 3.0

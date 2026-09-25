@@ -186,10 +186,11 @@ class PanelFx:
 # --- ana çizici ----------------------------------------------------------------
 
 class Renderer:
-    def __init__(self, screen: pygame.Surface, cfg: GameConfig, texts: dict):
+    def __init__(self, screen: pygame.Surface, cfg: GameConfig, texts: dict, side_panel: bool = False):
         self.screen = screen
         self.cfg = cfg
         self.tx = texts
+        self.side_panel = side_panel  # rakibin sağında nöron paneli için yer ayır
         self.vis_rng = random.Random()  # yalnızca görsel efektler için
         self.fx = [PanelFx(), PanelFx()]
         self._text_cache: dict = {}
@@ -203,10 +204,15 @@ class Renderer:
         self.top = int(H * 0.13)
         self.bottom = int(H * 0.07)
         gap = int(W * 0.03)
-        size = int(min((W - 3 * gap) / 2, H - self.top - self.bottom))
-        x0 = (W - 2 * size - gap) // 2
+        side_w = int(W * 0.23) if self.side_panel else 0
+        usable = W - side_w - (gap if side_w else 0)
+        size = int(min((usable - 3 * gap) / 2, H - self.top - self.bottom))
+        x0 = (usable - 2 * size - gap) // 2
         self.panel_size = size
         self.panels = [pygame.Rect(x0, self.top, size, size), pygame.Rect(x0 + size + gap, self.top, size, size)]
+        # Nöron paneli: rakip arenasının sağında, arenalarla aynı yükseklikte
+        sx = self.panels[1].right + gap
+        self.side_rect = pygame.Rect(sx, self.top, max(0, W - sx - gap // 2), H - self.top - gap // 2)
         self.scale = size / self.cfg.arena.width
         sc = self.scale
         self.table = make_table(size)
@@ -237,6 +243,21 @@ class Renderer:
         r = surf.get_rect(**pos)
         self.screen.blit(surf, r)
         return r
+
+    def wrap(self, s: str, font: str, width: int, sep: str = " ") -> list[str]:
+        """Metni verilen piksel genişliğine sığacak satırlara böl."""
+        f = self.fonts[font]
+        words, lines, cur = s.split(sep), [], ""
+        for w in words:
+            cand = w if not cur else cur + sep + w
+            if f.size(cand)[0] <= width or not cur:
+                cur = cand
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines
 
     # -- olaylar ve efektler --------------------------------------------------
 
@@ -424,12 +445,17 @@ class Renderer:
         pygame.draw.rect(self.screen, col, box, border_radius=6)
         self.screen.blit(surf, surf.get_rect(center=box.center))
         if note:
-            self.blit_text(note, "tiny", DIM, midtop=(rect.centerx, box.bottom + 3))
+            # Uzun açıklama " · " noktalarından satırlara bölünür (arena genişliğini aşmasın)
+            y = box.bottom + 3
+            for line in self.wrap(note, "tiny", int(rect.width * 1.05), sep=" · "):
+                r = self.blit_text(line, "tiny", DIM, midtop=(rect.centerx, y))
+                y = r.bottom
 
     def draw_timer(self, time_left: float) -> None:
         secs = int(math.ceil(time_left))
         col = (255, 80, 80) if secs <= 10 else TEXT
-        self.blit_text(f"{secs}", "big", col, midtop=(self.W // 2, int(self.H * 0.01)))
+        cx = (self.panels[0].right + self.panels[1].left) // 2  # iki arenanın ortası
+        self.blit_text(f"{secs}", "big", col, midtop=(cx, int(self.H * 0.01)))
 
     # -- tam ekran katmanlar --------------------------------------------------------
 

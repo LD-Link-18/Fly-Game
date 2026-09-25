@@ -153,6 +153,30 @@ class DisplayConfig:
 
 
 @dataclass
+class PrizeConfig:
+    # Ödül kuralı: ziyaretçi, ödül veren bir rakibe karşı (varsayılan: sinek beyni,
+    # kayıttan tekrarı dahil) en az `margin` puan fazla VE en az `min_score` yaparsa ödül kazanır.
+    enabled: bool = True
+    margin: int = 1                 # 1 = rakipten kesin fazla (beraberlik yetmez); 3 = en az 3 fark
+    min_score: int = 0              # ödül için gereken en düşük puan
+    eligible: list = field(default_factory=lambda: ["fly_brain"])  # ödül veren rakip türleri
+    max_per_day: int = 0            # günlük ödül stoğu (0 = sınırsız)
+
+
+@dataclass
+class StandConfig:
+    kiosk: bool = False             # tam ekran, fare gizli, çıkış için ESC basılı tutulur
+    exit_hold_s: float = 3.0        # kiosk: çıkmak için ESC'yi bu kadar basılı tut
+    idle_return_s: float = 40.0     # sonuç/isim/liste ekranında tuşa basılmazsa başlığa dön
+    attract_page_s: float = 8.0     # başlık ekranında sayfaların değişme aralığı
+    leaderboard_path: str = "runs/stand/leaderboard.json"
+    leaderboard_size: int = 10
+    leaderboard_scope: str = "all"  # "all" (tümü) veya "today" (yalnızca bugün)
+    initials: bool = True           # listeye giren ziyaretçiden 3 harf iste
+    neuron_panel: bool = True       # rakibin yanında nöron etkinliği paneli
+
+
+@dataclass
 class RecordingConfig:
     # Her turun iki tarafını da diske kaydet (sonradan "hayalet" tekrar için)
     enabled: bool = True
@@ -171,6 +195,8 @@ class GameConfig:
     heuristic: HeuristicConfig = field(default_factory=HeuristicConfig)
     brain: BrainConfig = field(default_factory=BrainConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
+    prize: PrizeConfig = field(default_factory=PrizeConfig)
+    stand: StandConfig = field(default_factory=StandConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
 
     def to_dict(self) -> dict:
@@ -184,7 +210,7 @@ class GameConfig:
         ajan ayarları (eylemleri değiştirir, dünyayı değil) dahil değildir.
         """
         d = self.to_dict()
-        for key in ("display", "recording", "heuristic", "brain"):
+        for key in ("display", "recording", "heuristic", "brain", "prize", "stand"):
             d.pop(key)
         blob = json.dumps(d, sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:16]
@@ -212,11 +238,15 @@ def _apply_overrides(obj, data: dict, path: str = "") -> None:
             setattr(obj, key, value)
 
 
-def load_config(path: str | Path | None = None) -> GameConfig:
+def load_config(path: str | Path | list | None = None) -> GameConfig:
+    """Varsayılanlar + TOML dosyaları. Birden fazla dosya verilirse sırayla uygulanır
+    (sonraki öncekini ezer), ör. ayarlanmış beyin + stant ayarları."""
     cfg = GameConfig()
-    if path:
-        with open(path, "rb") as f:
-            _apply_overrides(cfg, tomllib.load(f))
+    paths = path if isinstance(path, (list, tuple)) else [path]
+    for p in paths:
+        if p:
+            with open(p, "rb") as f:
+                _apply_overrides(cfg, tomllib.load(f))
     return cfg
 
 

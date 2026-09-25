@@ -48,6 +48,15 @@ KIND_LABELS = {
 }
 
 
+# Kısa görünen adlar (başlık, seçim ekranı, skor tablosu)
+DISPLAY_NAMES = {
+    "en": {AgentKind.HUMAN: "YOU", AgentKind.SCRIPTED: "SCRIPTED BOT", AgentKind.HEURISTIC: "HEURISTIC BOT",
+           AgentKind.RL: "RL AGENT", AgentKind.FLY_BRAIN: "FLY BRAIN", AgentKind.REPLAY: "REPLAY"},
+    "tr": {AgentKind.HUMAN: "SEN", AgentKind.SCRIPTED: "BETİKLİ BOT", AgentKind.HEURISTIC: "SEZGİSEL BOT",
+           AgentKind.RL: "RL AJANI", AgentKind.FLY_BRAIN: "SİNEK BEYNİ", AgentKind.REPLAY: "TEKRAR"},
+}
+
+
 class Agent(ABC):
     kind: AgentKind = AgentKind.SCRIPTED
     name: str = "agent"
@@ -68,6 +77,18 @@ class Agent(ABC):
 
     def ui_note(self, lang: str = "en") -> str | None:
         """İsteğe bağlı ikinci satır: ajanın hangi kısmının elle yazıldığını açıklar."""
+        return None
+
+    def display_name(self, lang: str = "en") -> str:
+        return DISPLAY_NAMES.get(lang, DISPLAY_NAMES["en"])[self.kind]
+
+    @property
+    def effective_kind(self) -> str:
+        """Ödül/skor tablosu için tür: kayıttan tekrarda kaydın kaynağının türü."""
+        return self.kind.value
+
+    def panel_info(self) -> dict | None:
+        """Nöron paneli düzeni (grup adları/boyutları); beyni olmayan ajanlar için None."""
         return None
 
     def describe(self) -> dict:

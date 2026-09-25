@@ -88,6 +88,28 @@ class ReplayAgent(Agent):
     def source_kind(self) -> str:
         return self.rec.agent.get("kind", "?")
 
+    @property
+    def effective_kind(self) -> str:
+        # Kaydedilmiş bir sinek beyni koşusunu yenmek de sinek beynini yenmektir
+        return self.source_kind
+
+    def display_name(self, lang: str = "en") -> str:
+        from .base import DISPLAY_NAMES, AgentKind
+
+        names = DISPLAY_NAMES.get(lang, DISPLAY_NAMES["en"])
+        try:
+            src = names[AgentKind(self.source_kind)]
+        except ValueError:
+            src = self.source_kind
+        return f"{src} ({'tekrar' if lang == 'tr' else 'replay'})"
+
+    def panel_info(self) -> dict | None:
+        # Kayıtta nöron paneli düzeni varsa, KAYIT olarak işaretleyip döndür
+        info = self.rec.agent.get("panel")
+        if not info:
+            return None
+        return dict(info, live=False, recorded=time.strftime("%Y-%m-%d %H:%M", time.localtime(self.rec.created)))
+
     def label(self, lang: str = "en") -> str:
         base = super().label(lang)
         src = SOURCE_NAMES.get(lang, SOURCE_NAMES["en"]).get(self.source_kind, self.source_kind)

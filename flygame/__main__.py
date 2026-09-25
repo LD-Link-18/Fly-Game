@@ -1,6 +1,6 @@
 """Komut satırı girişi.
 
-  python -m flygame play   [--opponent scripted] [--seed N] [--config f.toml] [--fullscreen] [--lang tr]
+  python -m flygame play   [--opponent flybrain,heuristic] [--kiosk] [--seed N] [--config f.toml] [--lang tr]
   python -m flygame record --agent scripted --seeds 1-20 [--out runs/scripted]
   python -m flygame verify runs/x.json.gz
   python -m flygame brain-download         # FlyWire verisini indir (~136 MB)
@@ -45,9 +45,13 @@ def cmd_play(args) -> None:
         cfg.display.language = args.lang
     if args.no_sound:
         cfg.display.sound = False
+    if args.kiosk:
+        cfg.stand.kiosk = True
     from .app import App
 
-    App(cfg, make_agent(args.opponent, cfg), args.seed).run()
+    # Birden fazla rakip (virgülle) verilirse ziyaretçi her turda seçer
+    opponents = [make_agent(spec.strip(), cfg) for spec in args.opponent.split(",") if spec.strip()]
+    App(cfg, opponents, args.seed).run()
 
 
 def cmd_record(args) -> None:
@@ -219,9 +223,12 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("play", help="run the split-screen game")
-    p.add_argument("--opponent", default="scripted", help="scripted | heuristic | flybrain | replay:<file-or-dir>")
+    p.add_argument("--opponent", default="scripted",
+                   help="scripted | heuristic | flybrain | replay:<file-or-dir>; comma list = visitor chooses")
+    p.add_argument("--kiosk", action="store_true", help="stand mode: fullscreen, no mouse, hold ESC to quit")
     p.add_argument("--seed", type=int, default=None, help="fixed seed for every round")
-    p.add_argument("--config", default=None, help="TOML file with setting overrides")
+    p.add_argument("--config", action="append", default=None,
+                   help="TOML file with setting overrides (repeatable; later files win)")
     p.add_argument("--fullscreen", action="store_true")
     p.add_argument("--lang", choices=["en", "tr"], default=None)
     p.add_argument("--no-sound", action="store_true")

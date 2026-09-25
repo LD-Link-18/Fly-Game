@@ -114,6 +114,57 @@ model are never modified. It trains on seeds 10000+, then reports default vs tun
 hold-out seeds it never saw, the tuned settings on a shuffled connectome, and the bots.
 Logs go to `runs/tuning/`.
 
+## Running the stand
+
+```bash
+./kiosk.sh                       # fullscreen kiosk: visitors choose FLY BRAIN or HEURISTIC BOT
+LANG_UI=tr ./kiosk.sh            # Turkish UI (F3 switches language at any time)
+OPPONENTS=flybrain ./kiosk.sh    # only the fly brain, no choice screen
+```
+
+`kiosk.sh` runs `play --kiosk` with `configs/brain_tuned.toml` + `configs/stand.toml` and
+restarts the game if it crashes. Kiosk mode: fullscreen, mouse hidden, returns to the
+title screen when idle; **hold ESC for 3 s to quit**.
+
+| Key | Operator action |
+|---|---|
+| F1 | help overlay with the current settings |
+| F2 | change the default opponent |
+| F3 | English / Turkish |
+| F4 | sound on / off |
+| F9 (twice) | reset the leaderboard (the old file is kept as a backup) |
+
+Visitor flow: title screens (rotating: title, "how does the fly play?", leaderboard) →
+choose opponent → 3-2-1 → 40 s round → result and prize → 3 initials if the score makes
+the top 10 → leaderboard. Rounds where the visitor never touched the controls are not
+recorded.
+
+**Neuron panel** (right of the fly): a scrolling spike raster of 192 real neurons from
+the simulation (the stimulated eye neurons, the 96 central-brain neurons that get the
+most input from them, and the descending neurons the decoder reads), what the eyes
+report, what the brain commands, and the whole-brain spike rate. It says LIVE for the
+running simulation and RECORDED for replays; bots get a "no brain" card.
+
+**Prize rule** (`[prize]` in `configs/stand.toml`): a visitor wins a prize by beating an
+eligible opponent (default: the fly brain, including its recorded replays) by at least
+`margin` points with at least `min_score` points; `max_per_day` limits the daily stock.
+
+**Leaderboard**: `runs/stand/leaderboard.json`, written atomically after every round. It
+shows the top visitor scores, the average score of each opponent at the stand, and
+visitors' win/loss counts per opponent.
+
+No GPU at the stand? Pre-record ghost runs and replay them (labelled RECORDED, with the
+recorded neuron activity):
+
+```bash
+.venv/bin/python -m flygame record --agent flybrain --config configs/brain_tuned.toml --seeds 1-50 --out runs/fly_ghosts
+OPPONENTS=replay:runs/fly_ghosts,heuristic ./kiosk.sh
+```
+
+To stop the screen from blanking during the event (GNOME):
+`gsettings set org.gnome.desktop.session idle-delay 0` and
+`gsettings set org.gnome.desktop.screensaver lock-enabled false`.
+
 ## Headless tools
 
 ```bash
