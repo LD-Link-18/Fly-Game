@@ -1,6 +1,6 @@
 """FlyWire v783 konnektom verisinin yüklenmesi ve önbelleğe alınması.
 
-Ham veri (bkz. README, "Fly brain" bölümü):
+Ham veri (bkz. README.md, "Sinek beyni" bölümü):
   data/flywire/Completeness_783.csv       - modeldeki nöronlar (Shiu et al. 2024)
   data/flywire/Connectivity_783.parquet   - bağlantılar ve işaretli sinaps sayıları
   data/flywire/neuron_annotations.tsv     - hücre tipleri ve taraf (Schlegel et al. 2024)
@@ -112,7 +112,7 @@ def load_connectome(data_dir: Path | str = DATA_DIR) -> Connectome:
         if missing:
             raise FileNotFoundError(
                 f"FlyWire data missing in {data_dir}: {', '.join(missing)}. "
-                "See README section 'Fly brain' for download commands."
+                "Run: python -m flygame brain-download (see README.en.md, section 'Fly brain')."
             )
         print("Building connectome cache (one time, ~30 s)...")
         build_cache(data_dir)

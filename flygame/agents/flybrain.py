@@ -26,6 +26,9 @@ from ..config import BrainConfig, GameConfig
 from ..sensing import GameState
 from .base import Agent, AgentKind
 
+NO_SPIKES = np.zeros(0, dtype=np.int32)
+MAP_SPACE = "flywire783"  # spike indeksleri bu nöron sırasına göredir (Completeness_783.csv)
+
 
 class FlyBrainAgent(Agent):
     kind = AgentKind.FLY_BRAIN
@@ -41,12 +44,10 @@ class FlyBrainAgent(Agent):
         self.n_neurons, self.n_connections = conn.n_neurons, conn.n_connections
         # Kodlayıcı/kod çözücü ayarlama aracıyla ortaktır (bkz. brain/interface.py)
         self.io = BrainIO(conn, self.bc)
-        # Nöron paneli için ek okunan nöronlar (kararı etkilemez; yalnızca gösterim)
-        self._build_panel_sample(conn)
-        self.R0 = len(self.io.readout_idx)
-        readout = np.concatenate([self.io.readout_idx, self.extra_idx])
-        self.brain = LIFBrain(conn, self.io.input_idx, readout, device=self.bc.device,
-                              params=LIFParams(dt=self.bc.dt_ms))
+        # track_fired: her adımda tüm beyinde ateşleyen nöronlar beyin haritası için
+        # okunur (kararı etkilemez; yalnızca gösterim)
+        self.brain = LIFBrain(conn, self.io.input_idx, self.io.readout_idx, device=self.bc.device,
+                              params=LIFParams(dt=self.bc.dt_ms), track_fired=True)
         # Isınma: çekirdek derleme ve spike dağıtım yolunun ilk kullanımı burada olsun,
         # oyun sırasında takılmasın (girdi olmadan spike olmaz, dağıtım yolu çalışmaz)
         self.brain.set_input_rates(np.full(len(self.io.input_idx), 150.0, np.float32))
@@ -60,7 +61,7 @@ class FlyBrainAgent(Agent):
         self.P = params_from_config(self.bc)
         self.dec = DecoderState.new(1, self.P["cruise_forward"])
         self.in_rates = np.zeros(4)
-        self.raster_rows: list[int] = []
+        self.fired = NO_SPIKES
         self.tick_ms = 0.0
         self.brain.reset(seed)
         self.game_ms = 0.0
@@ -76,15 +77,13 @@ class FlyBrainAgent(Agent):
         self.game_ms += state.raw.dt * 1000.0
         block = self.brain.block_ms
         n_blocks = int((self.game_ms - self.brain.time_ms) / block + 1e-9)
-        self.raster_rows, self.tick_ms = [], 0.0
+        self.fired, self.tick_ms = NO_SPIKES, 0.0
         if n_blocks > 0:
             counts = self.brain.run(n_blocks)
-            self.io.decode(counts[:, :self.R0], n_blocks * block, self.P, self.dec)
+            self.io.decode(counts, n_blocks * block, self.P, self.dec)
             self.sim_ms += n_blocks * block
             self.tick_ms = n_blocks * block
-            # Panel satırları: önce ek örnek (göz + merkez), sonra karar veren DN'ler
-            raster = np.concatenate([counts[0, self.R0:], counts[0, :self.R0]])
-            self.raster_rows = np.flatnonzero(raster > 0).tolist()
+            self.fired = self.brain.last_fired  # bu adımda ateşleyen tüm nöronlar (harita)
         self.wall_s += time.perf_counter() - t0
         return Action(float(self.dec.turn[0]), float(self.dec.forward[0]))
 
@@ -105,58 +104,22 @@ class FlyBrainAgent(Agent):
             "escape": bool(self.dec.escaping[0]),
             "turn": round(float(self.dec.turn[0]), 3),
             "fwd": round(float(self.dec.forward[0]), 3),
-            "raster": self.raster_rows,
+            "fired": self.fired,  # kayıtta sıkıştırılarak saklanır (bkz. recording.py)
         }
 
-    # -- nöron paneli ------------------------------------------------------------------
-
-    def _build_panel_sample(self, conn) -> None:
-        """Panelde gösterilecek nöronlar: uyarılan göz nöronlarından örnekler, bu göz
-        nöronlarından en çok girdi alan merkez beyin nöronları ve okunan inen nöronlar."""
-        io = self.io
-
-        def spread(idx: np.ndarray, k: int, order: np.ndarray | None = None) -> np.ndarray:
-            # Gruptan k nöronu düzenli aralıklarla seç (retinotopikse önden arkaya sıralı)
-            if order is not None:
-                idx = idx[np.argsort(order)]
-            if len(idx) <= k:
-                return idx
-            return idx[np.linspace(0, len(idx) - 1, k).round().astype(int)]
-
-        nl = len(io.in_groups[("fruit", "left")])
-        az = np.abs(io.fruit_az) if io.fruit_az is not None else None
-        eye_l = spread(io.in_groups[("fruit", "left")], 24, None if az is None else np.nan_to_num(az[:nl], nan=999))
-        eye_r = spread(io.in_groups[("fruit", "right")], 24, None if az is None else np.nan_to_num(az[nl:], nan=999))
-        loom = np.concatenate([spread(io.in_groups[("loom", "left")], 16), spread(io.in_groups[("loom", "right")], 16)])
-
-        # Merkez: uyarılan göz nöronlarından en çok uyarıcı sinaps alan 96 nöron
-        inputs = io.input_idx
-        starts, ends = conn.rowptr[inputs], conn.rowptr[inputs + 1]
-        syn = np.concatenate([np.arange(a, b) for a, b in zip(starts, ends)])
-        post, w = conn.post[syn].astype(np.int64), conn.weight[syn]
-        drive = np.bincount(post[w > 0], weights=w[w > 0], minlength=conn.n_neurons)
-        drive[np.concatenate([inputs, io.readout_idx])] = 0
-        central = np.argsort(drive)[::-1][:96]
-        central = central[drive[central] > 0]
-        central = central[np.argsort(conn.side[central] != "left", kind="stable")]  # önce sol taraf
-
-        self.extra_idx = np.concatenate([eye_l, eye_r, loom, central]).astype(np.int64)
-        self._panel_groups = [
-            {"en": "Left eye · object detectors (LC10a)", "tr": "Sol göz · nesne algılayıcılar (LC10a)",
-             "n": len(eye_l), "color": [90, 220, 120]},
-            {"en": "Right eye · object detectors (LC10a)", "tr": "Sağ göz · nesne algılayıcılar (LC10a)",
-             "n": len(eye_r), "color": [90, 220, 120]},
-            {"en": "Eyes · looming detectors (LPLC2, LC4)", "tr": "Gözler · yaklaşma algılayıcılar (LPLC2, LC4)",
-             "n": len(loom), "color": [255, 110, 90]},
-            {"en": "Central brain · strongest targets", "tr": "Merkez beyin · en güçlü hedefler",
-             "n": len(central), "color": [250, 230, 150]},
-            {"en": "Descending neurons (to the legs)", "tr": "İnen nöronlar (bacaklara)",
-             "n": len(io.readout_idx), "color": [255, 160, 60]},
-        ]
+    # -- nöron paneli (beyin haritası) ---------------------------------------------------
 
     def panel_info(self) -> dict:
-        return {"groups": self._panel_groups, "neurons": self.n_neurons,
-                "connections": self.n_connections, "live": True}
+        # Haritada renklendirilecek nöronlar (model indeksleri): girdi verilen göz nöronları
+        # ve kararın okunduğu inen nöronlar. Diğer tüm nöronlar da ateşledikçe haritada yanar.
+        io = self.io
+        roles = {
+            "fruit": np.concatenate([io.in_groups[("fruit", sd)] for sd in ("left", "right")]),
+            "loom": np.concatenate([io.in_groups[("loom", sd)] for sd in ("left", "right")]),
+            "decision": io.readout_idx,
+        }
+        return {"neurons": self.n_neurons, "connections": self.n_connections, "live": True,
+                "map": {"space": MAP_SPACE, **{k: v.astype(int).tolist() for k, v in roles.items()}}}
 
     def ui_note(self, lang: str = "en") -> str:
         # Dürüstlük: beynin neyi kontrol ettiği, neyin elle belirlendiği arayüzde yazılır

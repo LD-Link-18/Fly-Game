@@ -88,7 +88,8 @@ class Agent(ABC):
         return self.kind.value
 
     def panel_info(self) -> dict | None:
-        """Nöron paneli düzeni (grup adları/boyutları); beyni olmayan ajanlar için None."""
+        """Beyin haritası paneli bilgisi (ağ boyutu, haritada renklendirilecek nöron rolleri);
+        beyni olmayan ajanlar için None."""
         return None
 
     def describe(self) -> dict:

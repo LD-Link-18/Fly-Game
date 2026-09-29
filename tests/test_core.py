@@ -70,6 +70,25 @@ class TestReplay(unittest.TestCase):
         self.assertEqual(agent.kind, AgentKind.REPLAY)
         self.assertIn("scripted", agent.label("en"))
 
+    def test_fired_spikes_roundtrip(self):
+        # Beyin haritası verisi ("fired") kayıtta bit matrisine paketlenir, yüklerken geri açılır
+        import numpy as np
+
+        rec = Recording(seed=1, agent={"name": "x", "kind": "fly_brain"}, config={}, config_hash="h")
+        rng = np.random.default_rng(0)
+        fired = [np.sort(rng.choice(138639, int(rng.integers(0, 300)), replace=False)).astype(np.int32)
+                 for _ in range(40)]
+        for f in fired:
+            rec.add(Action(0, 0), {"spikes": len(f), "fired": f})
+        rec.add(Action(0, 0), None)
+        with tempfile.TemporaryDirectory() as d:
+            back = Recording.load(rec.save(Path(d) / "r.json.gz"))
+        for f, t in zip(fired, back.telemetry):
+            np.testing.assert_array_equal(t["fired"], f)
+            self.assertEqual(t["spikes"], len(f))
+        self.assertIsNone(back.telemetry[-1])
+        self.assertIn("fired", rec.telemetry[0])   # kaydetmek bellekteki kaydı değiştirmez
+
     def test_wrong_seed_rejected(self):
         cfg = GameConfig()
         res = run_round(ScriptedAgent(), 3, cfg, record=True)

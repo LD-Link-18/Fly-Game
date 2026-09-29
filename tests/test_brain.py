@@ -66,6 +66,21 @@ class TestLIFSemantics(unittest.TestCase):
         # Girdi kaybolmasaydı sonraki spike refrakter biter bitmez (adım 43) olurdu.
         self.assertEqual(s[1], 21 + 22 + 2)
 
+    def test_track_fired_lists_spiking_neurons(self):
+        # Beyin haritası: run() sonunda ateşleyen nöronlar = okunan sayımı > 0 olanlar
+        from flygame.brain.lif_torch import LIFBrain
+
+        b = LIFBrain(tiny_connectome(1095.6 / 0.275), [0], [0, 1], device="cpu", use_cuda_graph=False,
+                     track_fired=True)
+        b.reset(0)
+        b.set_input_rates(np.array([10000.0]))
+        self.assertEqual(b.last_fired.tolist(), [])
+        counts = b.run(1)                          # 18 adım: yalnızca girdi nöronu ateşler
+        self.assertEqual(b.last_fired.tolist(), [0])
+        counts = b.run(2)                          # sonraki blokta çıkış nöronu da (adım 21)
+        self.assertEqual(b.last_fired.tolist(), np.flatnonzero(counts[0] > 0).tolist())
+        self.assertEqual(b.last_fired.tolist(), [0, 1])
+
 
 @unittest.skipIf(torch is None or not torch.cuda.is_available() or not DATA.exists(),
                  "needs torch with CUDA and FlyWire data (python -m flygame brain-download)")

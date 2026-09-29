@@ -68,13 +68,16 @@ class LIFBrain:
     def __init__(self, conn: Connectome, input_idx: np.ndarray, readout_idx: np.ndarray,
                  device: str = "cuda", params: LIFParams = LIFParams(), seed: int = 0,
                  use_cuda_graph: bool = True, dtype: torch.dtype = torch.float32, batch: int = 1,
-                 backend: str = "auto"):
+                 backend: str = "auto", track_fired: bool = False):
         p = self.p = params
         self.device = torch.device(device)
         dev = self.device
         self.dtype = dtype
         self.B = int(batch)
         self.N = conn.n_neurons
+        # İsteğe bağlı: ilk üyenin (b = 0) tüm beyindeki spike'larını nöron başına say
+        # (beyin haritası için; simülasyonu değiştirmez, yalnızca okur)
+        self.track_fired = bool(track_fired)
         self.K = int(round(p.t_dly / p.dt))  # blok uzunluğu = sinaptik gecikme (adım)
         if self.K < 1:
             raise ValueError("synaptic delay must be at least one time step")
@@ -137,6 +140,9 @@ class LIFBrain:
         self.readout_counts = torch.zeros(B, len(self.readout_idx), device=dev)
         self.spike_total = torch.zeros(B, device=dev)  # run() sırasında üye başına tüm beyindeki spike sayısı
         self.last_spikes = np.zeros(B)
+        # run() sonunda: ilk üyede en az bir kez ateşleyen nöronlar (model indeksleri)
+        self.fired_counts = torch.zeros(N, device=dev) if self.track_fired else None
+        self.last_fired = np.zeros(0, dtype=np.int32)
         self.total_steps = 0
         if self.backend == "triton":
             # En kötü durum: her nöron blokta bir kez, girdi nöronları (refrakter 0) her 2 adımda bir
@@ -202,7 +208,16 @@ class LIFBrain:
         self.I.zero_()
         if nz.numel() == 0:
             return
+        self._count_fired(nz[:, 1], nz[:, 2])
         self._deliver(nz[:, 0], nz[:, 1], nz[:, 2])
+
+    def _count_fired(self, b_idx, n_idx) -> None:
+        # Tam sayı sayımı (1.0 eklemek): toplama sırası sonucu değiştirmez. Diğer üyelerin
+        # olayları 0 ağırlıkla eklenir: maskeyle seçmek her blokta GPU'yu bekletirdi.
+        if self.track_fired:
+            w = (b_idx == 0).to(self.fired_counts.dtype) if self.B > 1 else \
+                torch.ones(n_idx.shape, device=self.device)
+            self.fired_counts.index_add_(0, n_idx, w)
 
     def _deliver(self, k_idx, b_idx, n_idx) -> None:
         # Her spike'ın tüm çıkış sinapslarını sonraki bloğun I dizisine ekle
@@ -256,6 +271,7 @@ class LIFBrain:
         self.readout_counts.view(-1).index_add_(0, b_idx[m] * R + r[m],
                                                 torch.ones(int(m.sum()), device=self.device))
         self.spike_total.index_add_(0, b_idx, torch.ones(n_ev, device=self.device))
+        self._count_fired(b_idx, n_idx)
         self._deliver(k_idx, b_idx, n_idx)
 
     def _run_block(self) -> None:
@@ -292,9 +308,13 @@ class LIFBrain:
         """n_blocks blok çalıştır; (B, R) şeklinde okuma nöronu spike sayılarını döndür."""
         self.readout_counts.zero_()
         self.spike_total.zero_()
+        if self.track_fired:
+            self.fired_counts.zero_()
         for _ in range(n_blocks):
             self._run_block()
         self.last_spikes = self.spike_total.cpu().numpy()
+        if self.track_fired:
+            self.last_fired = self.fired_counts.nonzero().squeeze(1).to(torch.int32).cpu().numpy()
         return self.readout_counts.cpu().numpy()
 
     @property
