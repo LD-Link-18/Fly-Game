@@ -26,13 +26,13 @@ VOXEL_UM = np.array([0.004, 0.004, 0.040])  # FlyWire voksel boyutu (µm)
 
 
 def build_map_cache(data_dir: Path) -> Path:
-    with open(data_dir / "Completeness_783.csv", newline="") as f:
+    with open(data_dir / "Completeness_783.csv", newline="", encoding="utf-8") as f:
         rows = csv.reader(f)
         next(rows)
         root_ids = np.array([int(r[0]) for r in rows], dtype=np.int64)
     order = {rid: i for i, rid in enumerate(root_ids.tolist())}
     pos = np.full((len(root_ids), 3), np.nan, dtype=np.float32)
-    with open(data_dir / "neuron_annotations.tsv", newline="") as f:
+    with open(data_dir / "neuron_annotations.tsv", newline="", encoding="utf-8") as f:
         rows = csv.reader(f, delimiter="\t")
         head = next(rows)
         ci = [head.index(c) for c in ("root_id", "pos_x", "pos_y", "pos_z")]

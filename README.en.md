@@ -193,6 +193,13 @@ restarts the game 3 s after a crash. The config files can be changed with the `C
 environment variable. Kiosk mode: fullscreen, mouse hidden, returns to the title screen
 when idle; **hold ESC for 3 s to quit**.
 
+**Windows:** double-click `kiosk.bat`. On the first run it creates `.venv`, installs the
+packages (including CUDA PyTorch, ~3 GB) and downloads the FlyWire data; after that it
+behaves like `kiosk.sh`. All it needs is [Python 3.11+](https://www.python.org/downloads/)
+(with "Add python.exe to PATH" ticked) and an NVIDIA GPU for the fly brain. The same
+environment variables (`OPPONENTS`, `LANG_UI`, `CONFIGS`) apply; the PyTorch CUDA build can
+be changed with `TORCH_INDEX` (default: cu128).
+
 | Key | Operator action |
 |---|---|
 | F1 | help overlay with the current settings |
@@ -322,6 +329,7 @@ optional agent telemetry).
 | [flygame/brain/tuning.py](flygame/brain/tuning.py) | batched GPU evaluation and evolutionary search |
 | [flygame/brain/brainmap.py](flygame/brain/brainmap.py) | neuron positions in the brain |
 | [kiosk.sh](kiosk.sh) | stand launcher (restarts after a crash) |
+| [kiosk.bat](kiosk.bat) | Windows stand launcher (also does the setup on the first run) |
 | [tests/](tests/) | core, stand, brain and tuning tests |
 
 ## Sources

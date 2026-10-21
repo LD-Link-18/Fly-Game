@@ -1,0 +1,2 @@
+# Windows cmd, LF satır sonlu .bat dosyalarında etiketleri (goto) yanlış okuyabilir.
+*.bat text eol=crlf

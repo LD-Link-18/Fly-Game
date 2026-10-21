@@ -196,6 +196,13 @@ ile çalıştırır ve oyun çökerse 3 sn sonra yeniden başlatır. Ayar dosyal
 ortam değişkeniyle değiştirilebilir. Kiosk modu: tam ekran, fare gizli, boşta kalınca
 başlık ekranına döner; **çıkmak için ESC'yi 3 sn basılı tutun**.
 
+**Windows:** `kiosk.bat` dosyasına çift tıklayın. İlk çalıştırmada `.venv`'i kurar,
+paketleri (CUDA'lı PyTorch dahil, ~3 GB) yükler ve FlyWire verisini indirir; sonra
+`kiosk.sh` ile aynı şekilde çalışır. Gereken tek şey [Python 3.11+](https://www.python.org/downloads/)
+("Add python.exe to PATH" işaretli) ve sinek beyni için NVIDIA GPU. Aynı ortam
+değişkenleri (`OPPONENTS`, `LANG_UI`, `CONFIGS`) burada da geçerlidir; PyTorch'un CUDA
+sürümü `TORCH_INDEX` ile değiştirilebilir (varsayılan: cu128).
+
 | Tuş | Operatör işlemi |
 |---|---|
 | F1 | geçerli ayarları gösteren yardım ekranı |
@@ -325,6 +332,7 @@ gzip'li bir JSON dosyasıdır.
 | [flygame/brain/tuning.py](flygame/brain/tuning.py) | toplu GPU değerlendirme ve evrimsel arama |
 | [flygame/brain/brainmap.py](flygame/brain/brainmap.py) | nöronların beyindeki konumları |
 | [kiosk.sh](kiosk.sh) | stant başlatıcı (çökünce yeniden başlatır) |
+| [kiosk.bat](kiosk.bat) | Windows stant başlatıcı (ilk çalıştırmada kurulumu da yapar) |
 | [tests/](tests/) | çekirdek, stant, beyin ve ayarlama testleri |
 
 ## Kaynaklar
